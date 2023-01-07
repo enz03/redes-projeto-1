@@ -2,26 +2,25 @@ import socket
 import json
 from threading import Thread
 
+# contador vai ser utilizado pra ser o "id" de cada novo usuário
+contador = 0
 
-class RegistroUsuario:
-    def __init__(self, nome=None, endereco=None, telefone=None, email=""):
-        self.dados = {"Nome" : nome,
-                      "Endereço": endereco,
-                      "Telefone": telefone,
-                      "Email" : email}
+# dicionario registro de usuários tá assim: { str id : str apelido, endereco_cliente } 
+# o default é o apelido do usuário ser igual ao id dele
+def registra_usuario(self, enderecoDoCliente):
+    self.registrosDeUsuarios[contador] = [contador, enderecoDoCliente]
 
-    def recupera_campos(self):
-        return self.dados
 
-    def seta_campo(self, nomeCampo, valor):
-        if nomeCampo in self.dados:
-            self.dados[nomeCampo] = valor
-        else:
-            raise Exception(f"Campo {nomeCampo} inexistente")
+def edita_usuario():
+    pass
 
 
 class ServidorAtendimento:
-    def __init__(self, endereco_servidor="0.0.0.0", porta_servidor=3213, max_conexoes=1):
+    # aumentei o numero de conexoes aceitas pra 3                                   aqui
+    #                                                                                 |
+    #                                                                                 v
+    def __init__(self, endereco_servidor="0.0.0.0", porta_servidor=3213, max_conexoes=3):
+
         # Procedimento de criação do socket e configuração
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind((endereco_servidor, porta_servidor))
@@ -29,26 +28,33 @@ class ServidorAtendimento:
 
         # Registro de thread para atendimento e registros de usuários
         self.threadClientes = {}
+
+        # vou usar o registro de usuarios como "database" pros usuarios
         self.registrosDeUsuarios = {}
 
         # Inicia uma thread dedicada para escuta de novas conexões
         self.threadEscuta = Thread(target=self.implementacaoThreadEscuta)
         self.threadEscuta.run()
 
-    def handlerDeMensagem(self, mensagem):
-        return mensagem
+
+    def handlerDeMensagem(self, mensagem, enderecoDoUsuario):
+        return mensagem, enderecoDoUsuario
+
 
     def implementacaoThreadCliente(self, enderecoDoCliente, socketParaCliente):
         retries = 3
         socketParaCliente.settimeout(10) # timout de 10 segundos
 
         while True:
+
             try:
                 mensagem = socketParaCliente.recv(512) # aguarda por comando
-            except TimeoutError as e:
-                print(f"Cliente {enderecoDoCliente} não enviou mensagens nos últimos 10 minutos. Encerrando a conexão")
-                socketParaCliente.close() # fecha a conexão com o cliente pelo lado do servidor
-                break # quebra o loop infinito e termina a thread
+
+            # except TimeoutError as e:
+            #     print(f"Cliente {enderecoDoCliente} não enviou mensagens nos últimos 10 minutos. Encerrando a conexão")
+            #     socketParaCliente.close() # fecha a conexão com o cliente pelo lado do servidor
+            #     break # quebra o loop infinito e termina a thread
+
             except Exception as e:
                 # caso o socket tenha a conexão fechada pelo cliente ou algum outro erro que não timeout
                 print(f"Cliente {enderecoDoCliente} fechou a conexão com exceção: {e}")
@@ -71,7 +77,7 @@ class ServidorAtendimento:
             mensagem_decodificada = json.loads(mensagem.decode("utf-8"))
 
             # Por enquanto, retorna a mensagem recebida
-            resposta = self.handlerDeMensagem(mensagem_decodificada)
+            resposta = self.handlerDeMensagem(mensagem_decodificada, enderecoDoCliente)
 
             # fim do while
             resposta_bytes = json.dumps(resposta).encode("utf-8")
@@ -80,9 +86,9 @@ class ServidorAtendimento:
 
             socketParaCliente.send(resposta_bytes)
 
-        # Testaremos apenas com um usuário por servidor
-        # Forçaremos a parada da thread de escuta fechando socket
-        self.socket.close()
+        
+        #self.socket.close()
+
 
     def implementacaoThreadEscuta(self):
         while True:
@@ -101,102 +107,45 @@ class ServidorAtendimento:
                                                             args=(enderecoDoCliente, socketParaCliente),
                                                             daemon=True) # thread sem necessidade de join, será morta ao final do processo
             self.threadClientes[enderecoDoCliente].run() # inicia thread de atendimento ao novo cliente conectado
+            registra_usuario(self, enderecoDoCliente)
 
 
-def novoHandler(self, mensagem_decodificada):
+def novoHandler(self, mensagem_decodificada, enderecoDoCliente):
     resposta = {}
-    while True: # um grande IF
-        if "SERVIÇO" not in mensagem_decodificada:
-            # Retorna erro para cliente
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : "Mensagem não contém uma entrada de SERVIÇO"
-                        }
-            break
-        # if "SERVIÇO" in mensagem_decodificada:
-        if mensagem_decodificada["SERVIÇO"] not in ["Dados Pessoais"]:
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : f"Mensagem contém uma entrada inválida de SERVIÇO:{mensagem_decodificada['SERVIÇO']}"
-                        }
-            break
-        if "AÇÃO" not in mensagem_decodificada:
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : "Mensagem não contém uma entrada de AÇÃO"
-                        }
-            break
-        # if "AÇÃO" in mensagem_decodificada:
-        if mensagem_decodificada["AÇÃO"] not in ["CONSULTAR USUARIO", "CRIAR USUARIO", "MODIFICAR USUARIO", "REMOVER USUARIO"]:
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : f"Mensagem contém uma entrada inválida de AÇÃO:{mensagem_decodificada['AÇÃO']}"
-                        }
-            break
-        #if mensagem_decodificada["AÇÃO"] in ["CRIAR USUARIO", "MODIFICAR USUARIO", "REMOVER USUARIO"]:
-        if "EMAIL_USUARIO" not in mensagem_decodificada:
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : f"Mensagem não contém uma entrada de EMAIL_USUARIO"
-                        }
-            break
-        # if "EMAIL_USUARIO" in mensagem_decodificada:
-        if mensagem_decodificada["EMAIL_USUARIO"] not in self.registrosDeUsuarios:
-            if mensagem_decodificada["AÇÃO"] == "CRIAR USUARIO":
-                # Cria registro de usuario
-                self.registrosDeUsuarios[mensagem_decodificada["EMAIL_USUARIO"]] = RegistroUsuario(email=mensagem_decodificada["EMAIL_USUARIO"])
-                resposta = {"CODIGO DE ERRO": "200",
-                            "EXPLICAÇÃO" : f"Novo usuário registrado com email:{mensagem_decodificada['EMAIL_USUARIO']}"
-                            }
-            else:
-                resposta = {"CODIGO DE ERRO": "404",
-                            "EXPLICAÇÃO" : f"Usuário não registrado:{mensagem_decodificada['EMAIL_USUARIO']}"
-                            }
-            break
-        # if mensagem_decodificada["EMAIL_USUARIO"] in self.registrosDeUsuarios:
-        if mensagem_decodificada["AÇÃO"] == "CRIAR USUARIO":
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : f"Usuário já registrado:{mensagem_decodificada['EMAIL_USUARIO']}"
-                        }
-            break
-        # if mensagem_decodificada["EMAIL_USUARIO"] in self.registrosDeUsuarios:
-        #                  and mensagem_decodificada["AÇÃO"] != "CRIAR USUARIO":
-        if mensagem_decodificada["AÇÃO"] == "CONSULTAR USUARIO":
-            resposta = {"CODIGO DE ERRO": "200",
-                        "EXPLICAÇÃO" : self.registrosDeUsuarios[mensagem_decodificada["EMAIL_USUARIO"]].recupera_campos()
-                        }
-            break
-        # if mensagem_decodificada["EMAIL_USUARIO"] in self.registrosDeUsuarios:
-        #                  and mensagem_decodificada["AÇÃO"] not in ["CRIAR USUARIO", "CONSULTAR USUARIO]:
-        if mensagem_decodificada["AÇÃO"] == "REMOVER USUARIO":
-            del self.registrosDeUsuarios[mensagem_decodificada["EMAIL_USUARIO"]]
-            resposta = {"CODIGO DE ERRO": "200",
-                        "EXPLICAÇÃO" : f"Usuário removido:{mensagem_decodificada['EMAIL_USUARIO']}"
-                        }
-            break
-        # if mensagem_decodificada["AÇÃO"] == "MODIFICAR USUARIO":
-        # if mensagem_decodificada["SERVIÇO"] in ["Dados Pessoais"]:
-        if "CAMPO" not in mensagem_decodificada:
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : "Mensagem não contém uma entrada de CAMPO"
-                        }
-            break
-        # if "CAMPO" in mensagem_decodificada:
-        if mensagem_decodificada["CAMPO"] not in ["Nome", "Endereço", "Telefone", "Email"]:
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : f"Mensagem contém uma entrada inválida de CAMPO:{mensagem_decodificada['CAMPO']}"
-                        }
-            break
-        # if mensagem_decodificada["CAMPO"] in ["Nome", "Endereçservero", "Telefone", "Email"]:
-        if "VALOR" not in mensagem_decodificada:
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : "Mensagem não contém uma entrada de VALOR"
-                        }
-            break
-        # if "VALOR" in mensagem_decodificada:
-        self.registrosDeUsuarios[mensagem_decodificada["EMAIL_USUARIO"]].seta_campo(mensagem_decodificada["CAMPO"],
-                                                                                    mensagem_decodificada["VALOR"])
-        if mensagem_decodificada["CAMPO"] == "Email":
-            self.registrosDeUsuarios[mensagem_decodificada["VALOR"]] = self.registrosDeUsuarios[mensagem_decodificada["EMAIL_USUARIO"]]
-            del self.registrosDeUsuarios[mensagem_decodificada["EMAIL_USUARIO"]]
-        resposta = {"CODIGO DE ERRO": "200",
-                    "EXPLICAÇÃO" : f"Usuário {mensagem_decodificada['EMAIL_USUARIO']} teve o CAMPO:{mensagem_decodificada['CAMPO']} atualizado para o VALOR:{mensagem_decodificada['VALOR']}"
-                    }
+    # self aqui se refere a estrutura de daods do server
+    # resposta é a resposta que a gnt vai dar pra comando
+
+    while True:
+        # mensagem aqui é um dicionário de 1 chave que tem outro dicionário dentro que é "mensagem" : "sua mensagem"
+        #                                                                                                 /\ essa é a mensagem_de_fato
+        #                                                                                                 |
+        #cmd é a primeira palavra da mensagem_de_fato
+        cmd = mensagem_decodificada[0]["mensagem"][0]
+        mensagem_de_fato = mensagem_decodificada[0]["mensagem"]
+        
+        # como esse nick é criado com .split(), ele nao aceita nomes com espaço (mas n tem nada na especificaçao contra isso)
+        if cmd == "/NICK":
+            pass
+        elif cmd == "/USER":
+            pass
+        elif cmd == "/QUIT":
+            pass
+        elif cmd == "/WHO":
+            pass
+        elif cmd == "/PRIVMSG":
+            pass
+
+##---------ESSES DEPENDEM DE + DE 1 CANAL---------------#
+
+        elif cmd == "/JOIN":
+            pass
+        elif cmd == "/PART":
+            pass
+        elif cmd == "/LIST":
+            pass
+        else:
+            if cmd[0] == "/":
+                resposta = {"mensagem" : "ERR UNKNOWNCOMMAND" }
         break
     return resposta
 
