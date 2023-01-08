@@ -18,8 +18,9 @@ def cliente():
     mensagem = [ { "mensagem" : "ola" } ]
 
     #envia alguma mensagem
-    while mensagem[0]["mensagem"] != "/QUIT":
+    while mensagem[0]["mensagem"][0] != "/QUIT":
         mensagem = [ { "mensagem" : input().split() } ]
+        
 
         # Transforma dicionário em JSON e em seguida para bytes
         mensagem_bytes = json.dumps(mensagem).encode("utf-8")

@@ -7,8 +7,25 @@ contador = 0
 
 # dicionario registro de usuários tá assim: { str id : str apelido, endereco_cliente } 
 # o default é o apelido do usuário ser igual ao id dele
-def registra_usuario(self, enderecoDoCliente):
-    self.registrosDeUsuarios[contador] = [contador, enderecoDoCliente]
+
+def registra_usuario(dict, enderecoDoCliente):
+    global contador
+    contador+=1
+    dict[contador] = [contador, enderecoDoCliente]
+    
+
+def encontra_por_apelido(dict, apelido):
+    for key in dict:
+        if dict[key][0] == apelido:
+            return key
+    return False 
+
+
+def encontra_por_endereco(dict, enderecoDoCliente):
+    for key in dict:
+        if dict[key][1][0] == enderecoDoCliente[0]:
+            return key
+    return False 
 
 
 def edita_usuario():
@@ -37,23 +54,74 @@ class ServidorAtendimento:
         self.threadEscuta.run()
 
 
-    def handlerDeMensagem(self, mensagem, enderecoDoUsuario):
-        return mensagem, enderecoDoUsuario
+    def handlerDeMensagem(self, mensagem_decodificada, enderecoDoUsuario):
+        resposta = {}
+        # self aqui se refere a estrutura de dados do server
+        # resposta é a resposta que a gnt vai dar pra comando
+
+        while True:
+            # mensagem aqui é um dicionário de 1 chave que tem outro dicionário dentro que é "mensagem" : "sua mensagem"
+            #                                                                                                 /\ essa é a mensagem_de_fato
+            #                                                                                                 |
+            #cmd é a primeira palavra da mensagem_de_fato
+            cmd = mensagem_decodificada[0]["mensagem"][0]
+            mensagem_de_fato = mensagem_decodificada[0]["mensagem"]
+            
+            # como esse nick é criado com .split(), ele nao aceita nomes com espaço (mas n tem nada na especificaçao contra isso)
+            if cmd == "/NICK":
+                chave_encontrada = encontra_por_apelido(self.registrosDeUsuarios, mensagem_de_fato[1])
+
+                if chave_encontrada:
+                    resposta = {"mensagem" : "Apelido já cadastrado" }
+
+                else:
+                    chave_encontrada = encontra_por_endereco(self.registrosDeUsuarios, enderecoDoUsuario)
+                    self.registrosDeUsuarios[chave_encontrada][0] = mensagem_de_fato[1]
+                    resposta = {"mensagem" : "Apelido cadastrado" }
+
+            elif cmd == "/USER":
+                pass
+
+            elif cmd == "/QUIT":
+                apelido_do_usuario = self.registrosDeUsuarios[encontra_por_endereco(self.registrosDeUsuarios, enderecoDoUsuario)][0]
+                self.socket.close()
+                # mensagem para ser enviada a outros usuarios
+                resposta = {"mensagem" : f"Usuário {apelido_do_usuario} saiu do servidor" }
+                
+            elif cmd == "/WHO":
+                pass
+            elif cmd == "/PRIVMSG":
+                pass
+
+    ##---------ESSES DEPENDEM DE + DE 1 CANAL---------------#
+
+            elif cmd == "/JOIN":
+                pass
+            elif cmd == "/PART":
+                pass
+            elif cmd == "/LIST":
+                pass
+            else:
+                if cmd[0] == "/":
+                    resposta = {"mensagem" : "ERR UNKNOWNCOMMAND" }
+            break
+        return resposta
 
 
     def implementacaoThreadCliente(self, enderecoDoCliente, socketParaCliente):
         retries = 3
         socketParaCliente.settimeout(10) # timout de 10 segundos
+        registra_usuario(self.registrosDeUsuarios, enderecoDoCliente)
 
         while True:
 
             try:
                 mensagem = socketParaCliente.recv(512) # aguarda por comando
 
-            # except TimeoutError as e:
-            #     print(f"Cliente {enderecoDoCliente} não enviou mensagens nos últimos 10 minutos. Encerrando a conexão")
-            #     socketParaCliente.close() # fecha a conexão com o cliente pelo lado do servidor
-            #     break # quebra o loop infinito e termina a thread
+            except TimeoutError as e:
+                print(f"Cliente {enderecoDoCliente} não enviou mensagens nos últimos 10 minutos. Encerrando a conexão")
+                socketParaCliente.close() # fecha a conexão com o cliente pelo lado do servidor
+                break # quebra o loop infinito e termina a thread
 
             except Exception as e:
                 # caso o socket tenha a conexão fechada pelo cliente ou algum outro erro que não timeout
@@ -87,7 +155,7 @@ class ServidorAtendimento:
             socketParaCliente.send(resposta_bytes)
 
         
-        #self.socket.close()
+        
 
 
     def implementacaoThreadEscuta(self):
@@ -107,50 +175,8 @@ class ServidorAtendimento:
                                                             args=(enderecoDoCliente, socketParaCliente),
                                                             daemon=True) # thread sem necessidade de join, será morta ao final do processo
             self.threadClientes[enderecoDoCliente].run() # inicia thread de atendimento ao novo cliente conectado
-            registra_usuario(self, enderecoDoCliente)
+            
 
-
-def novoHandler(self, mensagem_decodificada, enderecoDoCliente):
-    resposta = {}
-    # self aqui se refere a estrutura de daods do server
-    # resposta é a resposta que a gnt vai dar pra comando
-
-    while True:
-        # mensagem aqui é um dicionário de 1 chave que tem outro dicionário dentro que é "mensagem" : "sua mensagem"
-        #                                                                                                 /\ essa é a mensagem_de_fato
-        #                                                                                                 |
-        #cmd é a primeira palavra da mensagem_de_fato
-        cmd = mensagem_decodificada[0]["mensagem"][0]
-        mensagem_de_fato = mensagem_decodificada[0]["mensagem"]
-        
-        # como esse nick é criado com .split(), ele nao aceita nomes com espaço (mas n tem nada na especificaçao contra isso)
-        if cmd == "/NICK":
-            pass
-        elif cmd == "/USER":
-            pass
-        elif cmd == "/QUIT":
-            pass
-        elif cmd == "/WHO":
-            pass
-        elif cmd == "/PRIVMSG":
-            pass
-
-##---------ESSES DEPENDEM DE + DE 1 CANAL---------------#
-
-        elif cmd == "/JOIN":
-            pass
-        elif cmd == "/PART":
-            pass
-        elif cmd == "/LIST":
-            pass
-        else:
-            if cmd[0] == "/":
-                resposta = {"mensagem" : "ERR UNKNOWNCOMMAND" }
-        break
-    return resposta
-
-# substitui handler padrão por novo
-ServidorAtendimento.handlerDeMensagem = novoHandler
 
 
 # Cria o servidor
