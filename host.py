@@ -172,6 +172,7 @@ class Servidor:
             except:
                 resposta = {"mensagem": ">> [SERVER]: Error 400: Digite o canal que deseja entrar"}
             self.envia(resposta, para_canal, idCliente, socketCliente)
+
         elif cmd == "/PART":
             pass
 
