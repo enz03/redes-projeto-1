@@ -1,6 +1,7 @@
 import socket
 import json
 from threading import Thread
+from canais import canais
 
 # contador a ser usado como identificador único de cada usuário (zera quando o server reinicia)
 contador_id = 0
@@ -163,8 +164,14 @@ class Servidor:
             pass
         elif cmd == "/PART":
             pass
+
         elif cmd == "/LIST":
-            pass
+            canais_msg = 'Listando canais...'
+            for canal in canais:
+                canais_msg += f'\n\t\t{canal}'
+            resposta = {"mensagem": f">> [SERVER]: {canais_msg}"}
+            self.envia(resposta, para_canal, idCliente, socketCliente)
+
         elif cmd[0] == "/":
             resposta = {"mensagem" : ">> [SERVER]: ERR UNKNOWNCOMMAND"}
             self.envia(resposta, para_canal, idCliente, socketCliente)
