@@ -3,7 +3,6 @@ import time
 import socket
 import json
 from threading import Thread
-from canais import canais
 
 class Cliente():
     def __init__(self):
