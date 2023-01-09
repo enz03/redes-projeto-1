@@ -194,19 +194,28 @@ class Servidor:
             para_canal = True
             self.envia(resposta, para_canal, idCliente, socketCliente)
 
-
+    # Método para enviar adequadamente as respostas do servidor
     def envia(self, resposta, para_canal, idCliente, socketCliente):
+        # Caso a resposta do servidor tenha que ser transmitida no canal do remetente
         if para_canal:
+            # Converte a resposta em uma stream de bits
             resposta_bytes = json.dumps(resposta).encode("utf-8")
+
+            #toma o canal do remetente
             canalCliente = self.registrosDeUsuarios[idCliente][3]
+
             for usuario in self.registrosDeUsuarios.values():
+            # se o remetente estiver em um canal, envia a mensagem para todos deste canal, exceto ele
                 if canalCliente and canalCliente == usuario[3] and socketCliente != usuario[2]:
                     usuario[2].send(resposta_bytes)
             print(f'Servidor enviou para os devidos clientes a mensagem: {resposta}')
+        
+        # Caso a resposta do servidor interesse apenas ao remetente
         else:
             resposta_bytes = json.dumps(resposta).encode("utf-8")
             socketCliente.send(resposta_bytes)
             print(f"Servidor enviou para o cliente {idCliente} a mensagem: {resposta}")
             
-# Cria o servidor
+# Instancia e cria o servidor
 servidor = Servidor()
+del servidor
