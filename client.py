@@ -6,7 +6,7 @@ from threading import Thread
 
 # classe que opera o cliente, com suas devidas competências
 class Cliente():
-    def __init__(self):
+    def __init__(self, endereco_servidor):
         # Cria e instancia o socket do cliente, AF_INET => TCP
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -20,7 +20,8 @@ class Cliente():
         time.sleep(1)
 
         # Conecta com o servidor    
-        self.socket.connect((ip_servidor, 3214))
+        self.socket.connect((endereco_servidor, 3214))
+        print('>> Bem vindo ao IRC chat')
 
         # Envia o nome do host do cliente ao servidor do chat, para registro do novo usuário
         self.socket.send(json.dumps(nome_servidor).encode('utf-8'))
@@ -60,9 +61,9 @@ class Cliente():
             except:
                 break
 
-
-print('>> Bem vindo ao IRC chat')
+# Deve ser passado o endereço ip do dispositivo que está hospedando o servidor
+endereco_servidor = input('Digite o endereço do servidor que deseja se conectar: ')
 
 # cria e instancia o cliente
-cliente = Cliente()
+cliente = Cliente(endereco_servidor)
 del cliente

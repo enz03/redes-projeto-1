@@ -26,7 +26,7 @@ def encontra_por_apelido(dict, apelido):
 class Servidor:
 
     #construtor da classe
-    def __init__(self, endereco_servidor="0.0.0.0", porta_servidor=3214):
+    def __init__(self, endereco_servidor="localhost", porta_servidor=3214):
         # instancia o socket do servidor e o coloca para rodar no endereço e portas escolhidos
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind((endereco_servidor, porta_servidor))
