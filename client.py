@@ -2,41 +2,74 @@
 import time
 import socket
 import json
+from threading import Thread
+from canais import canais
 
-def cliente():
-    # Recupera endereço do servidor
-    socket_cliente_thread = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    nome_servidor = socket.gethostname()
-    ip_servidor = socket.gethostbyname(nome_servidor)
-    print(ip_servidor, nome_servidor)
+class Cliente():
+    def __init__(self, canal):
+        # Recupera endereço do servidor
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        nome_servidor = socket.gethostname()
+        ip_servidor = socket.gethostbyname(nome_servidor)
+        print(ip_servidor, nome_servidor)
 
-    # coloca a thread para dormir por dois segundos enquanto o servidor é iniciado
-    time.sleep(2)
 
-    # conecta com o servidor    
-    socket_cliente_thread.connect((ip_servidor, 3213))
-    mensagem = [ { "mensagem" : "ola" } ]
+        # conecta com o servidor    
+        self.socket.connect((ip_servidor, 3215))
 
-    #envia alguma mensagem
-    while mensagem[0]["mensagem"][0] != "/QUIT":
-        mensagem = [ { "mensagem" : input().split() } ]
-        
+        self.socket.send(json.dumps(canal).encode('utf-8'))
+        print('>> Aguardando servidor...')
+        time.sleep(1)
+        self.socket.send(json.dumps(nome_servidor).encode('utf-8'))
 
+
+        self.thread_recv = Thread(target=self.recebe, args=())
+        self.thread_recv.start()
+
+        self.operando()
+
+    def operando(self):
+        #envia alguma mensagem
+        while True:
+            mensagem = [ { "mensagem" : input().split() } ]
+            self.envia(mensagem)
+            if mensagem[0]["mensagem"][0] == "/QUIT":
+                self.socket.close()
+                print('>> Você foi desconectado')
+                break
+    
+    def envia(self, mensagem):
         # Transforma dicionário em JSON e em seguida para bytes
         mensagem_bytes = json.dumps(mensagem).encode("utf-8")
 
         # envia mensagem ao servidor
-        socket_cliente_thread.send(mensagem_bytes)
-        msg = socket_cliente_thread.recv(512)
-        print("Mensagem do servidor:", json.loads(msg.decode("utf-8")))
-
-    socket_cliente_thread.close()
-    print("oi")
-            
+        self.socket.send(mensagem_bytes)
     
+    
+    def recebe(self):
+        while True:
+            try:
+                msg = json.loads(self.socket.recv(512).decode('utf-8'))
+                print(msg['mensagem'])
+            except:
+                break
 
 
 # Cria uma thread cliente
-from concurrent.futures import ThreadPoolExecutor
-threadPool = ThreadPoolExecutor()
-threadPool.submit(cliente)
+print('>> Bem vindo ao IRC chat')
+
+print('>> [SERVER]: Listando canais...')
+for canal in canais:
+    print(f'>>\t\t{canal}')
+
+valid = False
+while not valid:
+    canal = input('>> [SERVER]: Digite o canal que deseja entrar: ')
+    valid = True
+    if canal not in canais:
+        valid = False
+    if not valid:
+        print('>> [SERVER]: Error 404 => Canal não listado')
+print('OK!!')
+
+client = Cliente(canal)
