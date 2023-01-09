@@ -26,7 +26,7 @@ def encontra_por_apelido(dict, apelido):
 class Servidor:
 
     #construtor da classe
-    def __init__(self, endereco_servidor="0.0.0.0", porta_servidor=3215):
+    def __init__(self, endereco_servidor="0.0.0.0", porta_servidor=3214):
         # instancia o socket do servidor e o coloca para rodar no endereço e portas escolhidos
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind((endereco_servidor, porta_servidor))
@@ -118,13 +118,14 @@ class Servidor:
         if cmd == "/NICK":
             # como esse nick é criado com .split(), ele nao aceita nomes com espaço (mas n tem nada 
             # na especificaçao contra isso)
-            chave_encontrada = encontra_por_apelido(self.registrosDeUsuarios, mensagem_de_fato[1])
+            novoApelido = " ".join(mensagem_de_fato[1:])
+            chave_encontrada = encontra_por_apelido(self.registrosDeUsuarios, novoApelido)
 
             if chave_encontrada:
-                resposta = {"mensagem" : ">> [SERVER]: Error 400: Apelido já cadastrado" }
+                resposta = {"mensagem" : ">> [SERVER]: Error 400: Apelido já em uso" }
 
             else:
-                self.registrosDeUsuarios[idCliente][0] = mensagem_de_fato[1]
+                self.registrosDeUsuarios[idCliente][0] = novoApelido
                 resposta = {"mensagem" : ">> [SERVER]: Apelido cadastrado" }
             self.envia(resposta, para_canal, idCliente, socketCliente)
 
@@ -161,7 +162,16 @@ class Servidor:
         ##---------ESSES DEPENDEM DE + DE 1 CANAL---------------#
 
         elif cmd == "/JOIN":
-            pass
+            try:
+                canal_a_entrar = " ".join(mensagem_de_fato[1:])
+                if canal_a_entrar in canais:
+                    self.registrosDeUsuarios[idCliente][3] = canal_a_entrar
+                    resposta = {"mensagem": f">> [SERVER]: Bem vindo ao canal {canal_a_entrar}"}
+                else:
+                    resposta = {"mensagem": ">> [SERVER]: Error 404: Canal não encontrado"}
+            except:
+                resposta = {"mensagem": ">> [SERVER]: Error 400: Digite o canal que deseja entrar"}
+            self.envia(resposta, para_canal, idCliente, socketCliente)
         elif cmd == "/PART":
             pass
 

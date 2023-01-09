@@ -15,7 +15,7 @@ class Cliente():
 
 
         # conecta com o servidor    
-        self.socket.connect((ip_servidor, 3215))
+        self.socket.connect((ip_servidor, 3214))
 
         self.socket.send(json.dumps(canal).encode('utf-8'))
         print('>> Aguardando servidor...')
