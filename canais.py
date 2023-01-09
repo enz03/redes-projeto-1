@@ -1,1 +1,1 @@
-canais = ['Amizades', 'Animes', 'Esportes', 'Rock', 'Relacionamentos', 'Lobby']
+canais = ['Amizades', 'Animes', 'Esportes', 'Rock', 'Relacionamentos']

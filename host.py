@@ -51,7 +51,7 @@ class Servidor:
                 nomeServidor = json.loads(socketCliente.recv(512).decode('utf-8'))
 
                 # registra o novo usuário no servidor e logo toma seu identificador
-                idCliente = registra_usuario(self.registrosDeUsuarios, nomeServidor, socketCliente, 'Lobby')
+                idCliente = registra_usuario(self.registrosDeUsuarios, nomeServidor, socketCliente, None)
 
                 # envia uma mensagem alertando o usuário do seu nickname gerado e como alterar
                 msg = {"mensagem": f">> [SERVER]: Seu apelido é {self.registrosDeUsuarios[idCliente][0]}, use o /NICK para alterar\n>> [SERVER]: Você está no canal de espera, use /LIST e /JOIN para aproveitar o chat"}
@@ -200,7 +200,7 @@ class Servidor:
             resposta_bytes = json.dumps(resposta).encode("utf-8")
             canalCliente = self.registrosDeUsuarios[idCliente][3]
             for usuario in self.registrosDeUsuarios.values():
-                if socketCliente != usuario[2] and canalCliente == usuario[3]:
+                if canalCliente and canalCliente == usuario[3] and socketCliente != usuario[2]:
                     usuario[2].send(resposta_bytes)
             print(f'Servidor enviou para os devidos clientes a mensagem: {resposta}')
         else:
