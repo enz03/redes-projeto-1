@@ -48,14 +48,13 @@ class Servidor:
 
                 # quando estabelecida a conexão, o cliente logo enviará o canal que deseja entrar
                 # e o nome do seu host
-                canal = json.loads(socketCliente.recv(512).decode('utf-8'))
                 nomeServidor = json.loads(socketCliente.recv(512).decode('utf-8'))
 
                 # registra o novo usuário no servidor e logo toma seu identificador
-                idCliente = registra_usuario(self.registrosDeUsuarios, nomeServidor, socketCliente, canal)
+                idCliente = registra_usuario(self.registrosDeUsuarios, nomeServidor, socketCliente, 'Lobby')
 
                 # envia uma mensagem alertando o usuário do seu nickname gerado e como alterar
-                msg = {"mensagem": f"Seu apelido é {self.registrosDeUsuarios[idCliente][0]}, use o /NICK para alterar"}
+                msg = {"mensagem": f">> [SERVER]: Seu apelido é {self.registrosDeUsuarios[idCliente][0]}, use o /NICK para alterar\n>> [SERVER]: Você está no canal de espera, use /LIST e /JOIN para aproveitar o chat"}
                 socketCliente.send(json.dumps(msg).encode('utf-8'))
                 
                 # inicia a thread de atendimento ao cliente

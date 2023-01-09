@@ -6,7 +6,7 @@ from threading import Thread
 from canais import canais
 
 class Cliente():
-    def __init__(self, canal):
+    def __init__(self):
         # Recupera endereço do servidor
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         nome_servidor = socket.gethostname()
@@ -17,7 +17,6 @@ class Cliente():
         # conecta com o servidor    
         self.socket.connect((ip_servidor, 3214))
 
-        self.socket.send(json.dumps(canal).encode('utf-8'))
         print('>> Aguardando servidor...')
         time.sleep(1)
         self.socket.send(json.dumps(nome_servidor).encode('utf-8'))
@@ -58,18 +57,4 @@ class Cliente():
 # Cria uma thread cliente
 print('>> Bem vindo ao IRC chat')
 
-print('>> [SERVER]: Listando canais...')
-for canal in canais:
-    print(f'>>\t\t{canal}')
-
-valid = False
-while not valid:
-    canal = input('>> [SERVER]: Digite o canal que deseja entrar: ')
-    valid = True
-    if canal not in canais:
-        valid = False
-    if not valid:
-        print('>> [SERVER]: Error 404 => Canal não listado')
-print('OK!!')
-
-client = Cliente(canal)
+client = Cliente()
