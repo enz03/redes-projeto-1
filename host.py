@@ -154,9 +154,55 @@ class Servidor:
             self.registrosDeUsuarios.pop(idCliente)
             
         elif cmd == "/WHO":
-            pass
+            # guarda o nome do canal
+            canal_desejado = mensagem_de_fato[1]
+
+            # se nao existir um canal com esse nome, a mensagem é de erro
+            if canal_desejado not in canais:
+                resposta = {"mensagem": ">> [SERVER]: Error 404: Canal não encontrado"}
+            
+            # se existir, verifica pelo dicionario quais usiários estão no canal atualmente
+            else:
+                usuarios_do_canal = ""
+                for key in self.registrosDeUsuarios:
+                    if self.registrosDeUsuarios[key][3] == canal_desejado:
+                        usuarios_do_canal += " " + self.registrosDeUsuarios[key][0]
+                resposta = {"mensagem": f">> [SERVER]: Usuários do canal são: {usuarios_do_canal}"}
+                self.envia(resposta, para_canal, idCliente, socketCliente)
+                
         elif cmd == "/PRIVMSG":
-            pass
+            achou_apelido = False
+            # verifica se o nome apos privmsg é um canal
+            if mensagem_de_fato[1] not in canais:
+
+                # se nao for um canal, verifica se existe um apelido com o nomes digitado
+                for key in self.registrosDeUsuarios:
+                    if self.registrosDeUsuarios[key][0] == mensagem_de_fato[1]:
+
+                        # se existir, guarda os dados do usuario com o apelido inputado
+                        idCliente_a_ser_enviado = key
+                        socketCliente_a_ser_enviado = self.registrosDeUsuarios[key][2]
+                        achou_apelido = True
+                        break
+                # se achou um usuário, manda a msg pra ele apenas
+                if achou_apelido:
+                    resposta = {"mensagem": f">> [{self.registrosDeUsuarios[idCliente][0]}]: {mensagem_de_fato[2]}"} 
+                    self.envia(resposta, para_canal, idCliente_a_ser_enviado, socketCliente_a_ser_enviado)
+                # se nao, nao
+                else:
+                    resposta = {"mensagem": "[SERVER]: Error 404: Usuário não encontrado"}
+                    self.envia(resposta, para_canal, idCliente, socketCliente)
+
+            else:
+                # se o nome digitado for um canal, o usuário "entra" no canal, manda a mensagem e volta pro seu canal de origem
+                para_canal = True
+                resposta = {"mensagem": f">> [{self.registrosDeUsuarios[idCliente][0]}]: {mensagem_de_fato[2]}"} 
+                canal_original = self.registrosDeUsuarios[idCliente][3]
+                self.registrosDeUsuarios[idCliente][3] = mensagem_de_fato[1]
+                self.envia(resposta, para_canal, idCliente, socketCliente)
+                self.registrosDeUsuarios[idCliente][3] = canal_original
+
+
 
         ##---------ESSES DEPENDEM DE + DE 1 CANAL---------------#
 
@@ -170,10 +216,24 @@ class Servidor:
                     resposta = {"mensagem": ">> [SERVER]: Error 404: Canal não encontrado"}
             except:
                 resposta = {"mensagem": ">> [SERVER]: Error 400: Digite o canal que deseja entrar"}
+
             self.envia(resposta, para_canal, idCliente, socketCliente)
 
         elif cmd == "/PART":
-            pass
+            # recebe o canal
+            canal_a_sair = mensagem_de_fato[1]
+            # verifica se ele existe ou nao
+            if canal_a_sair not in canais:
+                resposta = {"mensagem": ">> [SERVER]: Error 404: Canal não encontrado"}
+            # se ele existir, verifica se o usuário está no canal para poder sair
+            else:
+                if self.registrosDeUsuarios[idCliente][3] == canal_a_sair:
+                    resposta = {"mensagem": f">> [SERVER]: Você saiu do canal {canal_a_sair}"}
+                    self.registrosDeUsuarios[idCliente][3] = None
+                else:
+                    resposta = {"mensagem": f">> [SERVER]: Você não está no canal {canal_a_sair}"}
+            
+            self.envia(resposta, para_canal, idCliente, socketCliente)
 
         elif cmd == "/LIST":
             canais_msg = 'Listando canais...'
