@@ -1,0 +1,1 @@
+canais = ['Amizades', 'Animes', 'Esportes', 'Rock', 'Relacionamentos']

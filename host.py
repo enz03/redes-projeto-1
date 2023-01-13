@@ -1,209 +1,283 @@
 import socket
 import json
 from threading import Thread
+from canais import canais
 
+# contador a ser usado como identificador único de cada usuário (zera quando o server reinicia)
+contador_id = 0
 
-class RegistroUsuario:
-    def __init__(self, nome=None, endereco=None, telefone=None, email=""):
-        self.dados = {"Nome" : nome,
-                      "Endereço": endereco,
-                      "Telefone": telefone,
-                      "Email" : email}
+# função para adicionar um usuário ao dicionário de usuários da classe Servidor, e retorna o id desse usuário
+def registra_usuario(dict, nomeServidor, socketCliente, canal):
+    global contador_id
+    contador_id += 1
 
-    def recupera_campos(self):
-        return self.dados
+    #formato do usuário no banco de dados: int id: str apelido, str hostname, socket, str canal
+    dict[contador_id] = [f'Usuário {contador_id}', nomeServidor, socketCliente, canal]
+    return contador_id
 
-    def seta_campo(self, nomeCampo, valor):
-        if nomeCampo in self.dados:
-            self.dados[nomeCampo] = valor
-        else:
-            raise Exception(f"Campo {nomeCampo} inexistente")
+# função para encontrar o id de um usuário pelo seu apelido
+def encontra_por_apelido(dict, apelido):
+    for key in dict:
+        if str(dict[key][0]) == str(apelido):
+            return key
+    return False
 
+# classe que opera o servidor, com suas devidas competências
+class Servidor:
 
-class ServidorAtendimento:
-    def __init__(self, endereco_servidor="0.0.0.0", porta_servidor=3213, max_conexoes=1):
-        # Procedimento de criação do socket e configuração
+    #construtor da classe
+    def __init__(self, endereco_servidor='', porta_servidor=3214):
+        # instancia o socket do servidor e o coloca para rodar no endereço e portas escolhidos
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # se endereco_servidor = '', então o IP usado será o IP da própria máquina na conexão local
+        # a princípio, queremos usar o IP da conexão local mesmo (roteador)
         self.socket.bind((endereco_servidor, porta_servidor))
-        self.socket.listen(max_conexoes)
+        # sem limite de conexões
+        self.socket.listen()
 
-        # Registro de thread para atendimento e registros de usuários
-        self.threadClientes = {}
+        # dicionário que armazena os clientes do chat: chave é o id e valor são os dados do usuário
         self.registrosDeUsuarios = {}
 
-        # Inicia uma thread dedicada para escuta de novas conexões
-        self.threadEscuta = Thread(target=self.implementacaoThreadEscuta)
-        self.threadEscuta.run()
+        # inicia as operações necessárias do servidor
+        self.iniciar()
 
-    def handlerDeMensagem(self, mensagem):
-        return mensagem
-
-    def implementacaoThreadCliente(self, enderecoDoCliente, socketParaCliente):
-        retries = 3
-        socketParaCliente.settimeout(10) # timout de 10 segundos
-
+    def iniciar(self):
+        # servidor rodando constantemente
         while True:
             try:
-                mensagem = socketParaCliente.recv(512) # aguarda por comando
-            except TimeoutError as e:
-                print(f"Cliente {enderecoDoCliente} não enviou mensagens nos últimos 10 minutos. Encerrando a conexão")
-                socketParaCliente.close() # fecha a conexão com o cliente pelo lado do servidor
-                break # quebra o loop infinito e termina a thread
-            except Exception as e:
-                # caso o socket tenha a conexão fechada pelo cliente ou algum outro erro que não timeout
-                print(f"Cliente {enderecoDoCliente} fechou a conexão com exceção: {e}")
+                # servidor aguarda conexões de novos clientes
+                socketCliente, enderecoCliente = self.socket.accept()
+
+                # quando estabelecida a conexão, o cliente logo enviará o canal que deseja entrar
+                # e o nome do seu host
+                nomeServidor = json.loads(socketCliente.recv(512).decode('utf-8'))
+
+                # registra o novo usuário no servidor e logo toma seu identificador
+                idCliente = registra_usuario(self.registrosDeUsuarios, nomeServidor, socketCliente, None)
+
+                # envia uma mensagem alertando o usuário do seu nickname gerado e como alterar
+                msg = {"mensagem": f">> [SERVER]: Seu apelido é {self.registrosDeUsuarios[idCliente][0]}, use o /NICK para alterar\n>> [SERVER]: Você está no canal de espera, use /LIST e /JOIN para aproveitar o chat"}
+                socketCliente.send(json.dumps(msg).encode('utf-8'))
+
+                # inicia a thread de atendimento ao cliente
+                thread = Thread(target=self.implementacaoThreadCliente,
+                                args=(idCliente, socketCliente),
+                                daemon=True)
+                thread.start()
+
+            except:
+                # caso não seja possível estabelecer a conexão com algum cliente
+                print(f"Servidor: desligando thread de escuta")
+                # servidor é encerrado
+                self.socket.close()
                 break
 
-            # Se a mensagem for vazia, espere a próxima
-            if len(mensagem) != 0:
-                retries = 3
+
+    def implementacaoThreadCliente(self, idCliente, socketCliente):
+        # servidor escuta o cliente constantemente
+        while True:
+            try:
+                mensagem = socketCliente.recv(512) # aguarda por mensagem do cliente
+                if mensagem: # se mensagem possui conteudo
+                    print(f"Servidor recebeu do cliente {idCliente} a mensagem: {json.loads(mensagem.decode('utf-8'))}")
+
+                    # Decodifica mensagem em bytes para utf-8 e
+                    # em seguida decodifica a mensagem em Json para um dicionário Python
+                    mensagem_decodificada = json.loads(mensagem.decode("utf-8"))
+
+                    # lida com a mensagem e escolhe o que fazer
+                    self.handlerDeMensagem(mensagem_decodificada, idCliente, socketCliente)
+
+            except Exception as e:
+                # caso o socket tenha a conexão fechada pelo cliente ou algum outro erro ocorra
+                print(f"Cliente {idCliente} fechou a conexão com exceção: {e}")
+                break
+
+
+    def handlerDeMensagem(self, mensagem_decodificada, idCliente, socketCliente):
+        # o handler recebe como parâmetros os dados mais necessários para devida manipulação
+        # OPÇÃO: fazer receber o nickname também, já q é outro mt usado nesse método
+
+        # resposta que o servidor enviará ao(s) cliente(s)
+        resposta = {}
+
+        # a mensagem é uma lista que possui 1 dicionário de 1 chave e seu valor é a mensagem de fato
+        # obs.: a mensagem de fato é em split()
+        # formato: [{"mensagem": ["mensagem", "de", "fato"]}]
+        #cmd é a primeira palavra da mensagem_de_fato
+        cmd = mensagem_decodificada[0]["mensagem"][0]
+        mensagem_de_fato = mensagem_decodificada[0]["mensagem"]
+
+        # flag que decide se a resposta do servidor será transmitida no canal ou somente para o
+        # cliente que requisitou
+        para_canal = False
+
+        # ========== DAQUI PARA FRENTE SÃO OS CÓDIGOS DOS COMANDOS ============
+        # OBS.: o método envia foi criado para cuidar de decidir transmitir resposta para o canal
+        # ou não, e para ser executado no trecho de código que vc desejar, ao construir o comando
+
+        if cmd == "/NICK":
+            # como esse nick é criado com .split(), ele nao aceita nomes com espaço (mas n tem nada
+            # na especificaçao contra isso)
+            novoApelido = " ".join(mensagem_de_fato[1:])
+            chave_encontrada = encontra_por_apelido(self.registrosDeUsuarios, novoApelido)
+
+            if chave_encontrada:
+                resposta = {"mensagem" : ">> [SERVER]: Error 400: Apelido já em uso" }
+
             else:
-                retries -= 1
-                if retries == 0:
-                    break
-                continue
+                self.registrosDeUsuarios[idCliente][0] = novoApelido
+                resposta = {"mensagem" : ">> [SERVER]: Apelido cadastrado" }
+            self.envia(resposta, para_canal, idCliente, socketCliente)
+
+        elif cmd == "/USER":
+            if len(mensagem_de_fato) > 1:
+                chave_encontrada = encontra_por_apelido(self.registrosDeUsuarios, mensagem_de_fato[1])
+                if chave_encontrada:
+                    nome_usuario = self.registrosDeUsuarios[chave_encontrada][0]
+                    nome_real = chave_encontrada
+                    endereco = self.registrosDeUsuarios[chave_encontrada][1]
+                    resposta = {"mensagem": f">> [SERVER]: Dados do usuário: nick: {nome_usuario} | nome: {nome_real} | host: {endereco}"}
+                else:
+                    resposta = {"mensagem": f">> [SERVER]: Error 404: Usuário não encontrado"}
+            else:
+                nome_usuario = self.registrosDeUsuarios[idCliente][0]
+                nome_real = idCliente
+                endereco = self.registrosDeUsuarios[idCliente][1]
+                resposta = {"mensagem": f">> [SERVER]: Dados do usuário: nick: {nome_usuario} | nome: {nome_real} | host: {endereco}"}
+            self.envia(resposta, para_canal, idCliente, socketCliente)
+
+        elif cmd == "/QUIT":
+            apelidoUsuario = self.registrosDeUsuarios[idCliente][0]
+            socketCliente.close()
+            resposta = {"mensagem" : f">> [SERVER]: Usuário {apelidoUsuario} saiu do servidor"}
+            para_canal = True
+            self.envia(resposta, para_canal, idCliente, socketCliente)
+            self.registrosDeUsuarios.pop(idCliente)
+
+        elif cmd == "/WHO":
+            # guarda o nome do canal
+            canal_desejado = mensagem_de_fato[1]
+
+            # se nao existir um canal com esse nome, a mensagem é de erro
+            if canal_desejado not in canais:
+                resposta = {"mensagem": ">> [SERVER]: Error 404: Canal não encontrado"}
+
+            # se existir, verifica pelo dicionario quais usiários estão no canal atualmente
+            else:
+                usuarios_do_canal = ""
+                for key in self.registrosDeUsuarios:
+                    if self.registrosDeUsuarios[key][3] == canal_desejado:
+                        usuarios_do_canal += " " + self.registrosDeUsuarios[key][0]
+                resposta = {"mensagem": f">> [SERVER]: Usuários do canal são: {usuarios_do_canal}"}
+                self.envia(resposta, para_canal, idCliente, socketCliente)
+
+        elif cmd == "/PRIVMSG":
+            achou_apelido = False
+            # verifica se o nome apos privmsg é um canal
+            if mensagem_de_fato[1] not in canais:
+
+                # se nao for um canal, verifica se existe um apelido com o nomes digitado
+                for key in self.registrosDeUsuarios:
+                    if self.registrosDeUsuarios[key][0] == mensagem_de_fato[1]:
+
+                        # se existir, guarda os dados do usuario com o apelido inputado
+                        idCliente_a_ser_enviado = key
+                        socketCliente_a_ser_enviado = self.registrosDeUsuarios[key][2]
+                        achou_apelido = True
+                        break
+                # se achou um usuário, manda a msg pra ele apenas
+                if achou_apelido:
+                    resposta = {"mensagem": f">> [{self.registrosDeUsuarios[idCliente][0]}]: {mensagem_de_fato[2]}"}
+                    self.envia(resposta, para_canal, idCliente_a_ser_enviado, socketCliente_a_ser_enviado)
+                # se nao, nao
+                else:
+                    resposta = {"mensagem": "[SERVER]: Error 404: Usuário não encontrado"}
+                    self.envia(resposta, para_canal, idCliente, socketCliente)
+
+            else:
+                # se o nome digitado for um canal, o usuário "entra" no canal, manda a mensagem e volta pro seu canal de origem
+                para_canal = True
+                resposta = {"mensagem": f">> [{self.registrosDeUsuarios[idCliente][0]}]: {mensagem_de_fato[2]}"}
+                canal_original = self.registrosDeUsuarios[idCliente][3]
+                self.registrosDeUsuarios[idCliente][3] = mensagem_de_fato[1]
+                self.envia(resposta, para_canal, idCliente, socketCliente)
+                self.registrosDeUsuarios[idCliente][3] = canal_original
 
 
-            print(f"Servidor recebeu do cliente {enderecoDoCliente} a mensagem: {json.loads(mensagem.decode('utf-8'))}")
 
-            # Decodifica mensagem em bytes para utf-8 e
-            # em seguida decodifica a mensagem em Json para um dicionário Python
-            mensagem_decodificada = json.loads(mensagem.decode("utf-8"))
+        ##---------ESSES DEPENDEM DE + DE 1 CANAL---------------#
 
-            # Por enquanto, retorna a mensagem recebida
-            resposta = self.handlerDeMensagem(mensagem_decodificada)
+        elif cmd == "/JOIN":
+            try:
+                canal_a_entrar = " ".join(mensagem_de_fato[1:])
+                if canal_a_entrar in canais:
+                    self.registrosDeUsuarios[idCliente][3] = canal_a_entrar
+                    resposta = {"mensagem": f">> [SERVER]: Bem vindo ao canal {canal_a_entrar}"}
+                else:
+                    resposta = {"mensagem": ">> [SERVER]: Error 404: Canal não encontrado"}
+            except:
+                resposta = {"mensagem": ">> [SERVER]: Error 400: Digite o canal que deseja entrar"}
 
-            # fim do while
+            self.envia(resposta, para_canal, idCliente, socketCliente)
+
+        elif cmd == "/PART":
+            # recebe o canal
+            canal_a_sair = mensagem_de_fato[1]
+            # verifica se ele existe ou nao
+            if canal_a_sair not in canais:
+                resposta = {"mensagem": ">> [SERVER]: Error 404: Canal não encontrado"}
+            # se ele existir, verifica se o usuário está no canal para poder sair
+            else:
+                if self.registrosDeUsuarios[idCliente][3] == canal_a_sair:
+                    resposta = {"mensagem": f">> [SERVER]: Você saiu do canal {canal_a_sair}"}
+                    self.registrosDeUsuarios[idCliente][3] = None
+                else:
+                    resposta = {"mensagem": f">> [SERVER]: Você não está no canal {canal_a_sair}"}
+
+            self.envia(resposta, para_canal, idCliente, socketCliente)
+
+        elif cmd == "/LIST":
+            canais_msg = 'Listando canais...'
+            for canal in canais:
+                canais_msg += f'\n\t\t{canal}'
+            resposta = {"mensagem": f">> [SERVER]: {canais_msg}"}
+            self.envia(resposta, para_canal, idCliente, socketCliente)
+
+        elif cmd[0] == "/":
+            resposta = {"mensagem" : ">> [SERVER]: ERR UNKNOWNCOMMAND"}
+            self.envia(resposta, para_canal, idCliente, socketCliente)
+
+        # caso a mensagem recebida pelo cliente não seja um comando e sim uma comunicação
+        # com os demais clientes
+        else:
+            apelidoUsuario = self.registrosDeUsuarios[idCliente][0]
+            resposta = {"mensagem": f">> [{apelidoUsuario}]: " + " ".join(mensagem_de_fato)}
+            para_canal = True
+            self.envia(resposta, para_canal, idCliente, socketCliente)
+
+    # Método para enviar adequadamente as respostas do servidor
+    def envia(self, resposta, para_canal, idCliente, socketCliente):
+        # Caso a resposta do servidor tenha que ser transmitida no canal do remetente
+        if para_canal:
+            # Converte a resposta em uma stream de bits
             resposta_bytes = json.dumps(resposta).encode("utf-8")
 
-            print(f"Servidor enviou para o cliente {enderecoDoCliente} a mensagem: {resposta}")
+            #toma o canal do remetente
+            canalCliente = self.registrosDeUsuarios[idCliente][3]
 
-            socketParaCliente.send(resposta_bytes)
+            for usuario in self.registrosDeUsuarios.values():
+            # se o remetente estiver em um canal, envia a mensagem para todos deste canal, exceto ele
+                if canalCliente and canalCliente == usuario[3] and socketCliente != usuario[2]:
+                    usuario[2].send(resposta_bytes)
+            print(f'Servidor enviou para os devidos clientes a mensagem: {resposta}')
 
-        # Testaremos apenas com um usuário por servidor
-        # Forçaremos a parada da thread de escuta fechando socket
-        self.socket.close()
+        # Caso a resposta do servidor interesse apenas ao remetente
+        else:
+            resposta_bytes = json.dumps(resposta).encode("utf-8")
+            socketCliente.send(resposta_bytes)
+            print(f"Servidor enviou para o cliente {idCliente} a mensagem: {resposta}")
 
-    def implementacaoThreadEscuta(self):
-        while True:
-            # Thread fica bloqueada enquanto aguarda por conexões,
-            # enquanto servidor continua rodando normalmente
-            try:
-                (socketParaCliente, enderecoDoCliente) = self.socket.accept()
-            except OSError:
-                # Como fechamos o socket na thread para cliente,
-                # quando tentarmos escutar no mesmo socket, ele não mais
-                # existirá e lançará um erro
-                # Não é isso que servidores de verdade fazem, é só um exemplo
-                print(f"Servidor: desligando thread de escuta")
-                break
-            self.threadClientes[enderecoDoCliente] = Thread(target=self.implementacaoThreadCliente,
-                                                            args=(enderecoDoCliente, socketParaCliente),
-                                                            daemon=True) # thread sem necessidade de join, será morta ao final do processo
-            self.threadClientes[enderecoDoCliente].run() # inicia thread de atendimento ao novo cliente conectado
-
-
-def novoHandler(self, mensagem_decodificada):
-    resposta = {}
-    while True: # um grande IF
-        if "SERVIÇO" not in mensagem_decodificada:
-            # Retorna erro para cliente
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : "Mensagem não contém uma entrada de SERVIÇO"
-                        }
-            break
-        # if "SERVIÇO" in mensagem_decodificada:
-        if mensagem_decodificada["SERVIÇO"] not in ["Dados Pessoais"]:
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : f"Mensagem contém uma entrada inválida de SERVIÇO:{mensagem_decodificada['SERVIÇO']}"
-                        }
-            break
-        if "AÇÃO" not in mensagem_decodificada:
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : "Mensagem não contém uma entrada de AÇÃO"
-                        }
-            break
-        # if "AÇÃO" in mensagem_decodificada:
-        if mensagem_decodificada["AÇÃO"] not in ["CONSULTAR USUARIO", "CRIAR USUARIO", "MODIFICAR USUARIO", "REMOVER USUARIO"]:
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : f"Mensagem contém uma entrada inválida de AÇÃO:{mensagem_decodificada['AÇÃO']}"
-                        }
-            break
-        #if mensagem_decodificada["AÇÃO"] in ["CRIAR USUARIO", "MODIFICAR USUARIO", "REMOVER USUARIO"]:
-        if "EMAIL_USUARIO" not in mensagem_decodificada:
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : f"Mensagem não contém uma entrada de EMAIL_USUARIO"
-                        }
-            break
-        # if "EMAIL_USUARIO" in mensagem_decodificada:
-        if mensagem_decodificada["EMAIL_USUARIO"] not in self.registrosDeUsuarios:
-            if mensagem_decodificada["AÇÃO"] == "CRIAR USUARIO":
-                # Cria registro de usuario
-                self.registrosDeUsuarios[mensagem_decodificada["EMAIL_USUARIO"]] = RegistroUsuario(email=mensagem_decodificada["EMAIL_USUARIO"])
-                resposta = {"CODIGO DE ERRO": "200",
-                            "EXPLICAÇÃO" : f"Novo usuário registrado com email:{mensagem_decodificada['EMAIL_USUARIO']}"
-                            }
-            else:
-                resposta = {"CODIGO DE ERRO": "404",
-                            "EXPLICAÇÃO" : f"Usuário não registrado:{mensagem_decodificada['EMAIL_USUARIO']}"
-                            }
-            break
-        # if mensagem_decodificada["EMAIL_USUARIO"] in self.registrosDeUsuarios:
-        if mensagem_decodificada["AÇÃO"] == "CRIAR USUARIO":
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : f"Usuário já registrado:{mensagem_decodificada['EMAIL_USUARIO']}"
-                        }
-            break
-        # if mensagem_decodificada["EMAIL_USUARIO"] in self.registrosDeUsuarios:
-        #                  and mensagem_decodificada["AÇÃO"] != "CRIAR USUARIO":
-        if mensagem_decodificada["AÇÃO"] == "CONSULTAR USUARIO":
-            resposta = {"CODIGO DE ERRO": "200",
-                        "EXPLICAÇÃO" : self.registrosDeUsuarios[mensagem_decodificada["EMAIL_USUARIO"]].recupera_campos()
-                        }
-            break
-        # if mensagem_decodificada["EMAIL_USUARIO"] in self.registrosDeUsuarios:
-        #                  and mensagem_decodificada["AÇÃO"] not in ["CRIAR USUARIO", "CONSULTAR USUARIO]:
-        if mensagem_decodificada["AÇÃO"] == "REMOVER USUARIO":
-            del self.registrosDeUsuarios[mensagem_decodificada["EMAIL_USUARIO"]]
-            resposta = {"CODIGO DE ERRO": "200",
-                        "EXPLICAÇÃO" : f"Usuário removido:{mensagem_decodificada['EMAIL_USUARIO']}"
-                        }
-            break
-        # if mensagem_decodificada["AÇÃO"] == "MODIFICAR USUARIO":
-        # if mensagem_decodificada["SERVIÇO"] in ["Dados Pessoais"]:
-        if "CAMPO" not in mensagem_decodificada:
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : "Mensagem não contém uma entrada de CAMPO"
-                        }
-            break
-        # if "CAMPO" in mensagem_decodificada:
-        if mensagem_decodificada["CAMPO"] not in ["Nome", "Endereço", "Telefone", "Email"]:
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : f"Mensagem contém uma entrada inválida de CAMPO:{mensagem_decodificada['CAMPO']}"
-                        }
-            break
-        # if mensagem_decodificada["CAMPO"] in ["Nome", "Endereçservero", "Telefone", "Email"]:
-        if "VALOR" not in mensagem_decodificada:
-            resposta = {"CODIGO DE ERRO": "404",
-                        "EXPLICAÇÃO" : "Mensagem não contém uma entrada de VALOR"
-                        }
-            break
-        # if "VALOR" in mensagem_decodificada:
-        self.registrosDeUsuarios[mensagem_decodificada["EMAIL_USUARIO"]].seta_campo(mensagem_decodificada["CAMPO"],
-                                                                                    mensagem_decodificada["VALOR"])
-        if mensagem_decodificada["CAMPO"] == "Email":
-            self.registrosDeUsuarios[mensagem_decodificada["VALOR"]] = self.registrosDeUsuarios[mensagem_decodificada["EMAIL_USUARIO"]]
-            del self.registrosDeUsuarios[mensagem_decodificada["EMAIL_USUARIO"]]
-        resposta = {"CODIGO DE ERRO": "200",
-                    "EXPLICAÇÃO" : f"Usuário {mensagem_decodificada['EMAIL_USUARIO']} teve o CAMPO:{mensagem_decodificada['CAMPO']} atualizado para o VALOR:{mensagem_decodificada['VALOR']}"
-                    }
-        break
-    return resposta
-
-# substitui handler padrão por novo
-ServidorAtendimento.handlerDeMensagem = novoHandler
-
-
-# Cria o servidor
-servidor = ServidorAtendimento()
+# Instancia e cria o servidor
+servidor = Servidor()
 del servidor
