@@ -20,15 +20,17 @@ def encontra_por_apelido(dict, apelido):
     for key in dict:
         if str(dict[key][0]) == str(apelido):
             return key
-    return False 
+    return False
 
 # classe que opera o servidor, com suas devidas competências
 class Servidor:
 
     #construtor da classe
-    def __init__(self, endereco_servidor="localhost", porta_servidor=3214):
+    def __init__(self, endereco_servidor='', porta_servidor=3214):
         # instancia o socket do servidor e o coloca para rodar no endereço e portas escolhidos
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # se endereco_servidor = '', então o IP usado será o IP da própria máquina na conexão local
+        # a princípio, queremos usar o IP da conexão local mesmo (roteador)
         self.socket.bind((endereco_servidor, porta_servidor))
         # sem limite de conexões
         self.socket.listen()
@@ -56,7 +58,7 @@ class Servidor:
                 # envia uma mensagem alertando o usuário do seu nickname gerado e como alterar
                 msg = {"mensagem": f">> [SERVER]: Seu apelido é {self.registrosDeUsuarios[idCliente][0]}, use o /NICK para alterar\n>> [SERVER]: Você está no canal de espera, use /LIST e /JOIN para aproveitar o chat"}
                 socketCliente.send(json.dumps(msg).encode('utf-8'))
-                
+
                 # inicia a thread de atendimento ao cliente
                 thread = Thread(target=self.implementacaoThreadCliente,
                                 args=(idCliente, socketCliente),
@@ -69,8 +71,8 @@ class Servidor:
                 # servidor é encerrado
                 self.socket.close()
                 break
-        
-    
+
+
     def implementacaoThreadCliente(self, idCliente, socketCliente):
         # servidor escuta o cliente constantemente
         while True:
@@ -78,11 +80,11 @@ class Servidor:
                 mensagem = socketCliente.recv(512) # aguarda por mensagem do cliente
                 if mensagem: # se mensagem possui conteudo
                     print(f"Servidor recebeu do cliente {idCliente} a mensagem: {json.loads(mensagem.decode('utf-8'))}")
-                    
+
                     # Decodifica mensagem em bytes para utf-8 e
                     # em seguida decodifica a mensagem em Json para um dicionário Python
                     mensagem_decodificada = json.loads(mensagem.decode("utf-8"))
-                    
+
                     # lida com a mensagem e escolhe o que fazer
                     self.handlerDeMensagem(mensagem_decodificada, idCliente, socketCliente)
 
@@ -109,13 +111,13 @@ class Servidor:
         # flag que decide se a resposta do servidor será transmitida no canal ou somente para o
         # cliente que requisitou
         para_canal = False
-        
+
         # ========== DAQUI PARA FRENTE SÃO OS CÓDIGOS DOS COMANDOS ============
-        # OBS.: o método envia foi criado para cuidar de decidir transmitir resposta para o canal 
+        # OBS.: o método envia foi criado para cuidar de decidir transmitir resposta para o canal
         # ou não, e para ser executado no trecho de código que vc desejar, ao construir o comando
 
         if cmd == "/NICK":
-            # como esse nick é criado com .split(), ele nao aceita nomes com espaço (mas n tem nada 
+            # como esse nick é criado com .split(), ele nao aceita nomes com espaço (mas n tem nada
             # na especificaçao contra isso)
             novoApelido = " ".join(mensagem_de_fato[1:])
             chave_encontrada = encontra_por_apelido(self.registrosDeUsuarios, novoApelido)
@@ -152,7 +154,7 @@ class Servidor:
             para_canal = True
             self.envia(resposta, para_canal, idCliente, socketCliente)
             self.registrosDeUsuarios.pop(idCliente)
-            
+
         elif cmd == "/WHO":
             # guarda o nome do canal
             canal_desejado = mensagem_de_fato[1]
@@ -160,7 +162,7 @@ class Servidor:
             # se nao existir um canal com esse nome, a mensagem é de erro
             if canal_desejado not in canais:
                 resposta = {"mensagem": ">> [SERVER]: Error 404: Canal não encontrado"}
-            
+
             # se existir, verifica pelo dicionario quais usiários estão no canal atualmente
             else:
                 usuarios_do_canal = ""
@@ -169,7 +171,7 @@ class Servidor:
                         usuarios_do_canal += " " + self.registrosDeUsuarios[key][0]
                 resposta = {"mensagem": f">> [SERVER]: Usuários do canal são: {usuarios_do_canal}"}
                 self.envia(resposta, para_canal, idCliente, socketCliente)
-                
+
         elif cmd == "/PRIVMSG":
             achou_apelido = False
             # verifica se o nome apos privmsg é um canal
@@ -186,7 +188,7 @@ class Servidor:
                         break
                 # se achou um usuário, manda a msg pra ele apenas
                 if achou_apelido:
-                    resposta = {"mensagem": f">> [{self.registrosDeUsuarios[idCliente][0]}]: {mensagem_de_fato[2]}"} 
+                    resposta = {"mensagem": f">> [{self.registrosDeUsuarios[idCliente][0]}]: {mensagem_de_fato[2]}"}
                     self.envia(resposta, para_canal, idCliente_a_ser_enviado, socketCliente_a_ser_enviado)
                 # se nao, nao
                 else:
@@ -196,7 +198,7 @@ class Servidor:
             else:
                 # se o nome digitado for um canal, o usuário "entra" no canal, manda a mensagem e volta pro seu canal de origem
                 para_canal = True
-                resposta = {"mensagem": f">> [{self.registrosDeUsuarios[idCliente][0]}]: {mensagem_de_fato[2]}"} 
+                resposta = {"mensagem": f">> [{self.registrosDeUsuarios[idCliente][0]}]: {mensagem_de_fato[2]}"}
                 canal_original = self.registrosDeUsuarios[idCliente][3]
                 self.registrosDeUsuarios[idCliente][3] = mensagem_de_fato[1]
                 self.envia(resposta, para_canal, idCliente, socketCliente)
@@ -232,7 +234,7 @@ class Servidor:
                     self.registrosDeUsuarios[idCliente][3] = None
                 else:
                     resposta = {"mensagem": f">> [SERVER]: Você não está no canal {canal_a_sair}"}
-            
+
             self.envia(resposta, para_canal, idCliente, socketCliente)
 
         elif cmd == "/LIST":
@@ -269,13 +271,13 @@ class Servidor:
                 if canalCliente and canalCliente == usuario[3] and socketCliente != usuario[2]:
                     usuario[2].send(resposta_bytes)
             print(f'Servidor enviou para os devidos clientes a mensagem: {resposta}')
-        
+
         # Caso a resposta do servidor interesse apenas ao remetente
         else:
             resposta_bytes = json.dumps(resposta).encode("utf-8")
             socketCliente.send(resposta_bytes)
             print(f"Servidor enviou para o cliente {idCliente} a mensagem: {resposta}")
-            
+
 # Instancia e cria o servidor
 servidor = Servidor()
 del servidor
