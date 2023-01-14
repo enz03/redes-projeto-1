@@ -61,7 +61,7 @@ class Servidor:
                 # espera a thread de escuta do cliente iniciar
                 time.sleep(1)
                 # envia para o cliente uma resposta confirmando seu cadastro no chat
-                msg = {"mensagem": f">> [SERVER]: Bem vindo, você está registrado no {self.destino}!! Seu apelido é {self.registrosDeUsuarios[idCliente][0]}, use o /NICK para alterar\n>> [SERVER]: Você está no canal de espera... Use /LIST e /JOIN para aproveitar o chat"}
+                msg = {"mensagem": f">> [SERVER]: Seu apelido é {self.registrosDeUsuarios[idCliente][0]}, use o /NICK para alterar\n>> [SERVER]: Você está no canal de espera... Use /LIST e /JOIN para aproveitar o chat"}
                 socketCliente.send(json.dumps(msg).encode('utf-8'))
 
                 # inicia a thread de atendimento ao cliente
