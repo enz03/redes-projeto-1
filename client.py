@@ -1,4 +1,3 @@
-
 import time
 import socket
 import json
@@ -18,7 +17,7 @@ class Cliente():
         time.sleep(1)
 
         self.socket.connect((endereco_servidor, 6667))
-        print('>> Conectado com sucesso!!\n>> Estamos lhe cadastrando no chat')
+        print('>> Conectado com sucesso!!\n>> Estamos cadastrando seu usuário no chat')
 
         # Envia os nomes do host do cliente e do usuário para, registro de tal cliente
         dados_resgistro = f'{nome_host_cliente}###{nome_usuario}'
