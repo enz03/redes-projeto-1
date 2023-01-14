@@ -4,33 +4,30 @@ import socket
 import json
 from threading import Thread
 
-# classe que opera o cliente, com suas devidas competências
 class Cliente():
-    def __init__(self, endereco_servidor):
-        # Cria e instancia o socket do cliente, AF_INET => TCP
+    def __init__(self, endereco_servidor, nome_usuario):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         # toma o endereço do servidor e exibe-o no console do usuário
-        nome_servidor = socket.gethostname()
-        ip_servidor = socket.gethostbyname(nome_servidor)
-        print(ip_servidor, nome_servidor)
+        nome_host_cliente = socket.gethostname()
+        ip_host_cliente = socket.gethostbyname(nome_host_cliente)
+        print(ip_host_cliente, nome_host_cliente)
 
         # Aguarda servidor operar
         print('>> Aguardando servidor...')
         time.sleep(1)
 
-        # Conecta com o servidor    
-        self.socket.connect((endereco_servidor, 3214))
-        print('>> Bem vindo ao IRC chat')
+        self.socket.connect((endereco_servidor, 6667))
+        print('>> Conectado com sucesso!!\n>> Estamos lhe cadastrando no chat')
 
-        # Envia o nome do host do cliente ao servidor do chat, para registro do novo usuário
-        self.socket.send(json.dumps(nome_servidor).encode('utf-8'))
+        # Envia os nomes do host do cliente e do usuário para, registro de tal cliente
+        dados_resgistro = f'{nome_host_cliente}###{nome_usuario}'
+        self.socket.send(json.dumps(dados_resgistro).encode('utf-8'))
 
         # Cria a thread de recebimento de mensagens do servidor
         self.thread_recv = Thread(target=self.recebe, args=())
         self.thread_recv.start()
 
-        # nome auto-explicativo kkkk
         self.operando()
 
     def operando(self):
@@ -61,9 +58,8 @@ class Cliente():
             except:
                 break
 
-# Deve ser passado o endereço ip do dispositivo que está hospedando o servidor
 endereco_servidor = input('Digite o endereço do servidor que deseja se conectar: ')
+nome_usuario = input('Ótimo! Agora digite seu nome para podermos conectá-lo ao servidor: ')
 
-# cria e instancia o cliente
-cliente = Cliente(endereco_servidor)
+cliente = Cliente(endereco_servidor, nome_usuario)
 del cliente
