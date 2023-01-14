@@ -2,6 +2,7 @@ import socket
 import json
 from threading import Thread
 from canais import canais
+import time
 
 # contador a ser usado como identificador único de cada usuário (zera quando o server reinicia)
 contador_id = 0
@@ -34,8 +35,7 @@ class Servidor:
         # a princípio, queremos usar o IP da conexão local mesmo (roteador)
         self.socket.bind((enderecoServidor, portaServidor))
 
-        ipServidor = socket.gethostbyname(socket.gethostname())
-        print(f'Rodando servidor de ip {ipServidor} na porta {portaServidor}')
+        print(f'Rodando servidor na porta {portaServidor}')
         print(f'nodeID: {self.nodeID} | destino: {self.destino}')
 
         self.socket.listen()
@@ -58,6 +58,8 @@ class Servidor:
 
                 idCliente = registra_usuario(self.registrosDeUsuarios, nomeHost, socketCliente, None, nomeUser)
 
+                # espera a thread de escuta do cliente iniciar
+                time.sleep(1)
                 # envia para o cliente uma resposta confirmando seu cadastro no chat
                 msg = {"mensagem": f">> [SERVER]: Bem vindo, você está registrado no {self.destino}!! Seu apelido é {self.registrosDeUsuarios[idCliente][0]}, use o /NICK para alterar\n>> [SERVER]: Você está no canal de espera... Use /LIST e /JOIN para aproveitar o chat"}
                 socketCliente.send(json.dumps(msg).encode('utf-8'))
@@ -187,7 +189,7 @@ class Servidor:
                     # se achou um usuário, manda a msg pra ele apenas
                     if achou_apelido:
                         resto_da_mensagem = " ".join(mensagem_de_fato[2:])
-                        resposta = {"mensagem": f">> [{self.registrosDeUsuarios[idCliente][0]}]: {resto_da_mensagem}"}
+                        resposta = {"mensagem": f">> [{self.registrosDeUsuarios[idCliente][0]} (privado)]: {resto_da_mensagem}"}
                         self.envia(resposta, para_canal, idCliente_a_ser_enviado, socketCliente_a_ser_enviado)
                     # se nao, nao
                     else:
