@@ -24,10 +24,12 @@ class Cliente():
         self.socket.send(json.dumps(dados_resgistro).encode('utf-8'))
 
         # Cria a thread de recebimento de mensagens do servidor
-        self.thread_recv = Thread(target=self.recebe, args=())
-        self.thread_recv.start()
+        self.thread_recebe = Thread(target=self.recebe, args=())
+        self.thread_recebe.start()
 
-        self.operando()
+        # Cria a thread de envio de mensagens ao servidor
+        self.thread_envia = Thread(target=self.operando, args=())
+        self.thread_envia.start()
 
     def operando(self):
         # Cliente opera até digitar /QUIT e seu socket fechar
